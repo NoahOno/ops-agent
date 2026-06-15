@@ -1,0 +1,31 @@
+# 试点项目配置示例
+project:
+  name: demo-service
+  description: 示例微服务项目
+  owner: ops-team
+
+  coding:
+    project_name: demo-service
+    repo: demo-service
+    pipeline_id: ""          # 填入实际流水线 ID
+
+  tke:
+    cluster_id: ""           # 填入实际集群 ID
+    namespace: demo
+    replicas: 2
+    image:
+      registry: ccr.ccs.tencentyun.com
+      repository: ops-team/demo-service
+      tag: latest
+
+  manifests:
+    templates:
+      - deployment.yaml
+      - service.yaml
+    overrides:
+      dev: dev-overlay.yaml
+      prod: prod-overlay.yaml
+
+  notifications:
+    on_deploy_success: []
+    on_deploy_failure: []

@@ -33,6 +33,8 @@ htmlcov/
 
 .idea/
 .vscode/
+.kiro/
+.qoder/
 *.swp
 *.swo
 

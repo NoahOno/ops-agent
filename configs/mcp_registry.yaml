@@ -1,0 +1,119 @@
+# MCP server 注册表
+# 记录 ops-agent 可用的 MCP server 及其启动方式
+
+servers:
+  coding:
+    name: coding
+    description: 腾讯 Coding DevOps —— 项目、工作项、代码仓库、构建计划、流水线配置管理
+    command: python
+    args:
+      - -m
+      - mcp_servers.coding.server
+    env:
+      - CODING_TOKEN
+    tools:
+      # project
+      - list_projects
+      - get_project
+      - create_project
+      - delete_project
+      # issue / work item
+      - list_issues
+      - describe_issue
+      - create_issue
+      - delete_issue
+      - decompose_issue
+      # code / depot
+      - list_depots
+      - list_commits
+      - create_merge_request
+      # CI build (构建计划)
+      - list_ci_jobs
+      - describe_ci_job
+      - create_ci_job
+      - get_or_create_ci_job
+      - trigger_ci_build
+      - list_ci_builds
+      - describe_ci_build
+      - get_ci_build_log
+      # pipeline params (流水线参数)
+      - define_pipeline_params
+      - list_pipeline_params
+      - update_pipeline_param
+      - delete_pipeline_param
+      # repository link (仓库关联)
+      - link_repository
+      - list_linked_repos
+      - unlink_repository
+      - configure_webhook
+      # stage templates (构建步骤模板)
+      - list_stage_templates
+      - get_stage_template
+      - compose_pipeline
+      # triggers (触发条件)
+      - configure_trigger
+      - list_triggers
+      - delete_trigger
+      - validate_cron_expression
+      # notifications (通知)
+      - configure_notification
+      - list_notifications
+      - delete_notification
+      # artifacts (制品归档)
+      - configure_artifact
+      - list_artifacts_config
+      - list_ci_artifacts
+
+  gitlab:
+    name: gitlab
+    description: 内网 GitLab —— 项目搜索、分支管理
+    command: python
+    args:
+      - -m
+      - mcp_servers.gitlab.server
+    env:
+      - GITLAB_URL
+      - GITLAB_TOKEN
+    tools:
+      - list_projects
+      - get_project
+      - list_branches
+
+  jenkins:
+    name: jenkins
+    description: Jenkins —— 构建计划、构建触发、状态查询、日志获取、Stage 分析
+    command: python
+    args:
+      - -m
+      - mcp_servers.jenkins.server
+    env:
+      - JENKINS_URL
+      - JENKINS_USER
+      - JENKINS_TOKEN
+    tools:
+      - list_jobs
+      - create_job
+      - trigger_build
+      - get_build_status
+      - get_last_build_number
+      - get_build_log
+      - cancel_build
+      - replay_build
+      - get_build_stages
+
+  tke:
+    name: tke
+    description: 腾讯 TKE Kubernetes 集群管理
+    command: python
+    args:
+      - -m
+      - mcp_servers.tke.server
+    env:
+      - TKE_SECRET_ID
+      - TKE_SECRET_KEY
+      - TKE_REGION
+    tools:
+      - list_clusters
+      - list_namespaces
+      - get_deployments
+      - apply_manifest
