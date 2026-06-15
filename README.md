@@ -227,17 +227,200 @@ graph LR
 
 ---
 
-## Skill 清单
+## Skill 详解
 
-| Skill | 说明 | 引导流程 |
-|-------|------|---------|
-| `ops-pipeline` | CI 构建全流程编排 | 确认项目 → 获取凭据 → 生成 Jenkinsfile → 创建计划 → 触发构建 |
-| `pipeline-param-designer` | 流水线参数定义 | 收集参数 → 类型映射 → 持久化 → 生成 parameters 块 |
-| `repo-linker` | 仓库关联配置 | 选择来源 → 配置认证 → 分支策略 → Webhook |
-| `pipeline-composer` | 构建步骤编排 | 选择模板 → 排列顺序 → 并行配置 → 生成 Jenkinsfile |
-| `trigger-configurator` | 触发条件配置 | 选择类型 → 填写条件 → 校验 cron → 保存规则 |
-| `notification-setup` | 通知与归档配置 | 选择渠道 → 配置 Webhook → 通知条件 → 制品归档 |
-| `pipeline-runner` | 流水线执行与日志 | 确认参数 → 触发构建 → 轮询状态 → 输出汇总 |
+Skill 是面向 Agent 的领域知识文件，定义了特定场景下的工作流程、决策逻辑和 MCP 工具调用顺序。每个 Skill 独立可用，也可组合形成端到端流水线。
+
+### 完整流水线配置流程
+
+```
+repo-linker → pipeline-param-designer → pipeline-composer → trigger-configurator → notification-setup → ops-pipeline → pipeline-runner
+   ①              ②                        ③                     ④                      ⑤                 ⑥              ⑦
+ 关联仓库       定义参数                 编排步骤               配置触发               通知归档          创建计划        执行构建
+```
+
+---
+
+### ① repo-linker — 代码仓库关联
+
+**触发词：** "关联仓库"、"配置 Git 地址"、"设置源码拉取"
+
+**作用：** 将代码仓库关联到流水线，配置认证信息、分支策略和 Webhook 触发。
+
+**工作流程：**
+1. 选择仓库来源（Coding / GitLab / 外部 Git）
+2. 配置认证方式（SSH Key / HTTPS Token / 平台内置凭据）
+3. 设置分支策略（固定分支 / 正则匹配 / 全部分支）
+4. 可选配置 Webhook（push / merge_request / tag_push）
+
+**输出：**
+```json
+{
+  "repo_url": "https://coding.example.com/team/project.git",
+  "credential_id": "coding-deploy-key",
+  "default_branch": "master",
+  "auth_type": "coding_credential",
+  "branch_strategy": "single",
+  "webhook_enabled": true,
+  "webhook_events": ["push"]
+}
+```
+
+**依赖 MCP：** `link_repository`, `list_linked_repos`, `configure_webhook`, `list_depots`, `gitlab.list_projects`, `gitlab.list_branches`
+
+---
+
+### ② pipeline-param-designer — 流水线参数定义
+
+**触发词：** "给流水线加参数"、"配置构建参数"、"参数化构建"
+
+**作用：** 引导定义流水线构建参数（分支/版本号/环境/配置项），持久化到本地配置，并可生成 Jenkins `parameters {}` 块。
+
+**支持的参数类型：**
+
+| 类型 | Jenkins 对应 | 示例 |
+|------|-------------|------|
+| `string` | `string(name:...)` | `BRANCH=master` |
+| `choice` | `choice(name:..., choices:[...])` | `ENV=[dev, staging, prod]` |
+| `boolean` | `booleanParam(name:...)` | `SKIP_TESTS=false` |
+| `password` | `password(name:...)` | `DB_PASSWORD` |
+| `text` | `text(name:...)` | `DEPLOY_NOTES` |
+
+**输出：**
+```json
+[
+  {"name": "BRANCH", "type": "string", "default": "master", "required": true, "description": "构建分支"},
+  {"name": "ENV", "type": "choice", "choices": ["dev", "prod"], "default": "dev", "required": true, "description": "部署环境"},
+  {"name": "SKIP_TESTS", "type": "boolean", "default": false, "required": false, "description": "跳过测试"}
+]
+```
+
+**依赖 MCP：** `define_pipeline_params`, `list_pipeline_params`, `update_pipeline_param`, `delete_pipeline_param`
+
+---
+
+### ③ pipeline-composer — 构建步骤编排
+
+**触发词：** "编排构建步骤"、"创建 Pipeline"、"生成 Jenkinsfile"
+
+**作用：** 从 11 个预定义 Stage 模板中选择组合，自动生成完整的 Jenkinsfile。
+
+**可用模板：**
+
+| 模板 | 语言 | 说明 |
+|------|------|------|
+| `maven-build` | Java | mvn clean package -DskipTests |
+| `maven-test` | Java | mvn test + JUnit 报告 |
+| `gradle-build` | Java | ./gradlew build -x test |
+| `npm-build` | Node.js | npm ci + npm run build |
+| `npm-test` | Node.js | npm test |
+| `go-build` | Go | go build |
+| `go-test` | Go | go test ./... -v |
+| `docker-build-push` | 通用 | docker build + push |
+| `sonar-scan` | 通用 | SonarQube 代码扫描 |
+| `helm-deploy` | 通用 | Helm upgrade --install |
+| `artifact-archive` | 通用 | 制品归档 |
+
+**推荐组合：**
+- Java CI: `maven-build → maven-test → docker-build-push`
+- Node CI: `npm-build → npm-test → docker-build-push`
+- 完整 CD: `*-build → *-test → docker-build-push → helm-deploy`
+
+**依赖 MCP：** `list_stage_templates`, `get_stage_template`, `compose_pipeline`, `create_ci_job`, `jenkins.create_job`
+
+---
+
+### ④ trigger-configurator — 触发条件配置
+
+**触发词：** "配置触发条件"、"设置定时构建"、"推送代码自动构建"
+
+**作用：** 配置流水线的自动触发规则，支持 6 种触发类型。
+
+| 类型 | 说明 | 需要提供 |
+|------|------|---------|
+| `cron` | 定时触发 | cron 表达式（如 `0 2 * * 1`） |
+| `push` | 代码推送触发 | 分支模式 + 可选路径过滤 |
+| `merge_request` | MR 触发 | 源/目标分支 |
+| `tag_push` | 标签推送触发 | 标签匹配模式 |
+| `manual` | 手动触发 | 无 |
+| `api` | API/Webhook 触发 | 可选 Token |
+
+**依赖 MCP：** `configure_trigger`, `list_triggers`, `delete_trigger`, `validate_cron_expression`
+
+---
+
+### ⑤ notification-setup — 通知与归档配置
+
+**触发词：** "配置通知"、"构建失败发钉钉"、"配置制品归档"
+
+**作用：** 配置构建结果通知（钉钉/企微/邮件/Slack）和制品归档策略。
+
+**通知渠道：**
+
+| 渠道 | 配置方式 | 触发条件 |
+|------|---------|---------|
+| 钉钉 | Webhook URL | success / failure / always / unstable |
+| 企微 | Webhook URL | 同上 |
+| 邮件 | SMTP (host/port/user/pass) | 同上 |
+| Slack | Incoming Webhook URL | 同上 |
+
+**制品归档配置：** 存储类型（cos/nexus/coding_artifact）、存储路径、版本标记规则、保留天数。
+
+**依赖 MCP：** `configure_notification`, `list_notifications`, `delete_notification`, `configure_artifact`, `list_artifacts_config`, `list_ci_artifacts`
+
+---
+
+### ⑥ ops-pipeline — CI 构建全流程
+
+**触发词：** "创建 CI 流水线"、"创建构建计划"、"给这个服务建 CI"
+
+**作用：** CI 构建的端到端编排 — 从确认项目到触发构建的完整链路。这是最核心的 Skill，整合了其他 Skill 的配置产出。
+
+**两条流程：**
+
+| 流程 | 代码仓库 | CI 平台 | 步骤 |
+|------|---------|---------|------|
+| A | Coding 仓库 | Coding CI | 确认项目 → 获取凭据 → 生成 Jenkinsfile → 幂等创建 → 触发 |
+| B | GitLab 仓库 | Jenkins | 确认项目 → 创建 Job → 触发构建 → 查看结果 |
+
+**关键决策：**
+- 凭据 ID 从同类已有计划获取，不猜测
+- 无凭据时降级为保底版（仅编译验证，不推镜像）
+- 使用 `get_or_create_ci_job` 幂等创建，避免重复
+
+**依赖 MCP：** `list_projects`, `get_project`, `list_depots`, `list_ci_jobs`, `describe_ci_job`, `get_or_create_ci_job`, `trigger_ci_build`
+
+---
+
+### ⑦ pipeline-runner — 流水线执行与日志
+
+**触发词：** "执行流水线"、"触发构建"、"查看构建状态"、"构建日志"
+
+**作用：** 触发构建并跟踪全过程，输出执行结果汇总。构建失败时自动分析日志定位错误。
+
+**能力：**
+- 触发构建（支持参数化）
+- 轮询状态直到完成
+- 各 Stage 耗时分析
+- 日志错误定位与修复建议
+- 重跑失败构建 / 取消构建
+
+**输出示例：**
+```
+构建结果:
+  流水线: my-service-ci  #42
+  状态: FAILURE  耗时: 3m 25s
+
+  阶段耗时:
+    检出    [SUCCESS]  5s
+    构建    [FAILURE]  1m 32s  ← 失败点
+    推镜像  [SKIPPED]  -
+
+  错误摘要:
+    [ERROR] Compilation failure: cannot find symbol...
+```
+
+**依赖 MCP：** `trigger_ci_build`, `describe_ci_build`, `get_ci_build_log`, `jenkins.trigger_build`, `jenkins.get_build_status`, `jenkins.get_build_stages`, `jenkins.get_build_log`, `jenkins.cancel_build`, `jenkins.replay_build`
 
 ---
 
