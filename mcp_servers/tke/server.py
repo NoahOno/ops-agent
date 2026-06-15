@@ -28,4 +28,5 @@ def apply_manifest(cluster_id: str, namespace: str, manifest: str) -> str:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    from mcp_servers import run_server
+    run_server(mcp)

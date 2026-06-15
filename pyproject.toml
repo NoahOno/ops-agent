@@ -4,10 +4,11 @@ version = "0.1.0"
 description = "运维自动化 agent - 业务部署上线、CI/CD、网络配置"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=2.0.0",
+    "fastmcp>=3.0.0",
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

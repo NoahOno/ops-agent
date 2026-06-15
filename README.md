@@ -246,6 +246,7 @@ graph LR
 ```
 ops-agent/
 ├── mcp_servers/                  # MCP Server 实现
+│   ├── __init__.py               # 共享启动逻辑（stdio / streamable-http）
 │   ├── coding/
 │   │   ├── server.py             # 40 个 MCP Tool 注册
 │   │   ├── api.py                # Coding OpenAPI 客户端
@@ -271,6 +272,7 @@ ops-agent/
 │   ├── notification-setup/       # 通知归档引导
 │   └── pipeline-runner/          # 执行与日志引导
 ├── configs/
+│   ├── .env.example              # 环境变量模板
 │   ├── mcp_registry.yaml         # MCP Server 注册表
 │   ├── projects/                 # 项目配置
 │   ├── env/                      # 环境配置 (dev/prod)
@@ -280,6 +282,8 @@ ops-agent/
 ├── prompts/                      # Prompt 模板
 ├── tests/                        # 测试
 ├── docs/                         # 设计文档
+├── Dockerfile                    # 容器镜像构建
+├── docker-compose.yml            # 多服务编排
 ├── pyproject.toml                # 项目依赖
 └── Makefile                      # 常用命令
 ```
@@ -312,6 +316,10 @@ cp configs/.env.example configs/.env
 
 | 变量 | 说明 | 必需 |
 |------|------|------|
+| `MCP_TRANSPORT` | 传输模式: `stdio` (本地) / `streamable-http` (远程) | 否，默认 stdio |
+| `MCP_HOST` | HTTP 绑定地址 | 否，默认 0.0.0.0 |
+| `MCP_PORT` | HTTP 绑定端口 | 否，默认 8000 |
+| `MCP_STATELESS` | 无状态模式（推荐远程部署时开启） | 否，默认 false |
 | `CODING_TOKEN` | Coding DevOps 访问令牌 | 是 |
 | `CODING_TEAM` | Coding 团队名（用于拼接 API URL） | 是 |
 | `JENKINS_URL` | Jenkins 服务地址 | Jenkins 流程需要 |
@@ -326,13 +334,19 @@ cp configs/.env.example configs/.env
 ### 运行 MCP Server
 
 ```bash
-# 单独运行各 Server
+# ── 本地模式 (stdio，开发机默认) ──
 make run-coding
 make run-jenkins
 make run-gitlab
 make run-tke
 
-# 开发模式（带 Inspector）
+# ── 远程模式 (streamable-http，云服务器) ──
+make run-coding-remote    # :8001
+make run-jenkins-remote   # :8002
+make run-gitlab-remote    # :8003
+make run-tke-remote       # :8004
+
+# ── 开发模式（带 Inspector） ──
 make dev-coding
 make dev-jenkins
 make dev-gitlab
@@ -391,6 +405,108 @@ make test
 2. 编写 frontmatter（name + description）和执行流程
 3. 列出依赖的 MCP Tools
 4. 运行 `make link-skills` 链接到本地
+
+---
+
+## 云部署
+
+### 部署架构
+
+```mermaid
+graph TB
+    subgraph Cloud["云服务器"]
+        subgraph Docker["Docker Compose"]
+            C1["coding<br/>:8001"]
+            C2["jenkins<br/>:8002"]
+            C3["gitlab<br/>:8003"]
+            C4["tke<br/>:8004"]
+        end
+        Nginx["nginx<br/>:443 / :80"]
+    end
+
+    subgraph Client["客户端"]
+        Agent["AI Agent"]
+    end
+
+    Agent -- "streamable-http" --> Nginx
+    Nginx -- "/coding/*" --> C1
+    Nginx -- "/jenkins/*" --> C2
+    Nginx -- "/gitlab/*" --> C3
+    Nginx -- "/tke/*" --> C4
+
+    C1 --> CodingAPI["Coding API"]
+    C2 --> JenkinsAPI["Jenkins"]
+    C3 --> GitLabAPI["GitLab"]
+    C4 --> TKEAPI["TKE"]
+```
+
+### Docker Compose 部署
+
+```bash
+# 1. 配置环境变量
+cp configs/.env.example .env
+# 编辑 .env 填入实际凭据
+
+# 2. 构建并启动所有服务
+make docker-build
+make docker-up
+
+# 3. 验证服务
+curl http://localhost:8001/mcp -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}'
+
+# 4. 停止服务
+make docker-down
+```
+
+### 端口分配
+
+| Server | 端口 | 端点 |
+|--------|------|------|
+| Coding MCP | 8001 | `/mcp` |
+| Jenkins MCP | 8002 | `/mcp` |
+| GitLab MCP | 8003 | `/mcp` |
+| TKE MCP | 8004 | `/mcp` |
+
+### Nginx 反向代理（可选）
+
+统一入口，适合对外暴露：
+
+```nginx
+upstream coding_mcp { server 127.0.0.1:8001; }
+upstream jenkins_mcp { server 127.0.0.1:8002; }
+upstream gitlab_mcp { server 127.0.0.1:8003; }
+upstream tke_mcp    { server 127.0.0.1:8004; }
+
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+
+    location /coding/ { proxy_pass http://coding_mcp/; }
+    location /jenkins/ { proxy_pass http://jenkins_mcp/; }
+    location /gitlab/ { proxy_pass http://gitlab_mcp/; }
+    location /tke/    { proxy_pass http://tke_mcp/; }
+}
+```
+
+### 客户端连接配置
+
+远程模式下，MCP 客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "coding": {
+      "url": "http://your-server:8001/mcp",
+      "transport": "streamable-http"
+    },
+    "jenkins": {
+      "url": "http://your-server:8002/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
 
 ---
 

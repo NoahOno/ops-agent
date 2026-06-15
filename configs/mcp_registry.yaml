@@ -1,5 +1,15 @@
 # MCP server 注册表
 # 记录 ops-agent 可用的 MCP server 及其启动方式
+#
+# 传输模式:
+#   stdio  - 本地子进程（默认，适合开发机）
+#   streamable-http - 远程 HTTP（适合云服务器部署）
+#
+# 环境变量控制:
+#   MCP_TRANSPORT=stdio|streamable-http
+#   MCP_HOST=0.0.0.0
+#   MCP_PORT=8001
+#   MCP_STATELESS=true
 
 servers:
   coding:
@@ -9,8 +19,11 @@ servers:
     args:
       - -m
       - mcp_servers.coding.server
+    transport: streamable-http
+    port: 8001
     env:
       - CODING_TOKEN
+      - CODING_TEAM
     tools:
       # project
       - list_projects
@@ -71,6 +84,8 @@ servers:
     args:
       - -m
       - mcp_servers.gitlab.server
+    transport: streamable-http
+    port: 8003
     env:
       - GITLAB_URL
       - GITLAB_TOKEN
@@ -86,6 +101,8 @@ servers:
     args:
       - -m
       - mcp_servers.jenkins.server
+    transport: streamable-http
+    port: 8002
     env:
       - JENKINS_URL
       - JENKINS_USER
@@ -108,6 +125,8 @@ servers:
     args:
       - -m
       - mcp_servers.tke.server
+    transport: streamable-http
+    port: 8004
     env:
       - TKE_SECRET_ID
       - TKE_SECRET_KEY

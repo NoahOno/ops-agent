@@ -773,4 +773,5 @@ async def list_ci_artifacts(job_id: int, page: int = 1, page_size: int = 20) -> 
 
 
 if __name__ == "__main__":
-    mcp.run()
+    from mcp_servers import run_server
+    run_server(mcp)

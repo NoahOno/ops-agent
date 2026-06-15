@@ -75,4 +75,5 @@ async def list_branches(project_id: int, search: str = "") -> str:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    from mcp_servers import run_server
+    run_server(mcp)

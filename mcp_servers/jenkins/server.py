@@ -140,4 +140,5 @@ async def get_build_stages(job_name: str, build_number: int) -> str:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    from mcp_servers import run_server
+    run_server(mcp)

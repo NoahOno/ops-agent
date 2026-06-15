@@ -1,0 +1,58 @@
+services:
+  coding:
+    build: .
+    command: python -m mcp_servers.coding.server
+    ports:
+      - "8001:8001"
+    environment:
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8001
+      - MCP_STATELESS=true
+      - CODING_TOKEN=${CODING_TOKEN}
+      - CODING_TEAM=${CODING_TEAM}
+    restart: unless-stopped
+
+  jenkins:
+    build: .
+    command: python -m mcp_servers.jenkins.server
+    ports:
+      - "8002:8002"
+    environment:
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8002
+      - MCP_STATELESS=true
+      - JENKINS_URL=${JENKINS_URL}
+      - JENKINS_USER=${JENKINS_USER}
+      - JENKINS_TOKEN=${JENKINS_TOKEN}
+    restart: unless-stopped
+
+  gitlab:
+    build: .
+    command: python -m mcp_servers.gitlab.server
+    ports:
+      - "8003:8003"
+    environment:
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8003
+      - MCP_STATELESS=true
+      - GITLAB_URL=${GITLAB_URL}
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+    restart: unless-stopped
+
+  tke:
+    build: .
+    command: python -m mcp_servers.tke.server
+    ports:
+      - "8004:8004"
+    environment:
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8004
+      - MCP_STATELESS=true
+      - TKE_SECRET_ID=${TKE_SECRET_ID}
+      - TKE_SECRET_KEY=${TKE_SECRET_KEY}
+      - TKE_REGION=${TKE_REGION:-ap-guangzhou}
+    restart: unless-stopped
